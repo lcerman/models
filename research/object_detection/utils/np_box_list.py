@@ -30,11 +30,13 @@ class BoxList(object):
   objectness/classification scores).
   """
 
-  def __init__(self, data):
+  def __init__(self, data, **kwargs):
     """Constructs box collection.
 
     Args:
       data: a numpy array of shape [N, 4] representing box coordinates
+      kwargs: pairs of (field, field_data) representing fields to add,
+          see add_field for details.
 
     Raises:
       ValueError: if bbox data is not a numpy array
@@ -50,6 +52,8 @@ class BoxList(object):
       raise ValueError('Invalid box data. data must be a numpy array of '
                        'N*[y_min, x_min, y_max, x_max]')
     self.data = {'boxes': data}
+    for filed,field_data in kwargs.items():
+      self.add_field(filed,field_data)
 
   def num_boxes(self):
     """Return number of boxes held in collections."""
@@ -102,6 +106,20 @@ class BoxList(object):
     if not self.has_field(field):
       raise ValueError('field {} does not exist'.format(field))
     return self.data[field]
+
+  def get_fields(self, *fields):
+    """Convenience function for accesing multiple fields.
+
+    Args:
+      fields: tuple of strings used to speficy related fields to be accessed.
+
+    Returns:
+      tuple a numpy 1-d arrays representing data of associated fields
+
+    Raises:
+      ValueError: if invalid field
+    """
+    return tuple(self.get_field(field) for field in fields)
 
   def get_coordinates(self):
     """Get corner coordinates of boxes.
