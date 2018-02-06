@@ -67,7 +67,12 @@ flags.DEFINE_string('eval_dir', '',
                     'Directory to write eval summaries to.')
 flags.DEFINE_string('pipeline_config_path', '',
                     'Path to a pipeline_pb2.TrainEvalPipelineConfig config '
-                    'file. If provided, other configs are ignored')
+                    'file. If provided, other configs are ignored (except '
+                    'pipeline_eval_config_path).')
+flags.DEFINE_string('pipeline_eval_config_path', '',
+                    'Path to a pipeline_pb2.TrainEvalPipelineConfig config '
+                    'file. If provided, replaces fields eval_config and '
+                    'eval_input_config from pipeline_config_path.')
 flags.DEFINE_string('eval_config_path', '',
                     'Path to an eval_pb2.EvalConfig config file.')
 flags.DEFINE_string('input_config_path', '',
@@ -90,6 +95,14 @@ def main(unused_argv):
     tf.gfile.Copy(FLAGS.pipeline_config_path,
                   os.path.join(FLAGS.eval_dir, 'pipeline.config'),
                   overwrite=True)
+    if FLAGS.pipeline_eval_config_path:
+      configs_eval = config_util.get_configs_from_pipeline_file(
+          FLAGS.pipeline_eval_config_path)
+      tf.gfile.Copy(FLAGS.pipeline_eval_config_path,
+                    os.path.join(FLAGS.eval_dir, 'pipeline_eval.config'),
+                    overwrite=True)
+      configs['eval_config'] = configs_eval['eval_config']
+      configs['eval_input_config'] = configs_eval['eval_input_config']
   else:
     configs = config_util.get_configs_from_multiple_files(
         model_config_path=FLAGS.model_config_path,
