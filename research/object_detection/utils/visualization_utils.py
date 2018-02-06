@@ -175,7 +175,7 @@ def draw_bounding_box_on_image(image,
   draw.line([(left, top), (left, bottom), (right, bottom),
              (right, top), (left, top)], width=thickness, fill=color)
   try:
-    font = ImageFont.truetype('arial.ttf', font_size)
+    font = ImageFont.truetype('DejaVuSans', font_size)
   except IOError:
     font = ImageFont.load_default()
 
