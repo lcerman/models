@@ -90,3 +90,6 @@ ENV/
 
 # PyCharm
 .idea/
+
+# Compiled protos from TensorFlow Object Detection API
+/research/object_detection/protos/*_pb2.py
