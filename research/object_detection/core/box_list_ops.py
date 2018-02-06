@@ -805,12 +805,12 @@ def to_absolute_coordinates(boxlist,
     # Ensure range of input boxes is correct.
     if check_range:
       box_maximum = tf.reduce_max(boxlist.get())
-      max_assert = tf.Assert(
-          tf.greater_equal(maximum_normalized_coordinate, box_maximum),
-          ['maximum box coordinate value is larger '
-           'than %f: ' % maximum_normalized_coordinate, box_maximum])
-      with tf.control_dependencies([max_assert]):
-        width = tf.identity(width)
+      width = tf.cond(
+        tf.greater_equal(maximum_normalized_coordinate, box_maximum),
+        lambda: width,
+        lambda: tf.Print(width,
+           ['WARNING: maximum box coordinate value is larger '
+            'than %f: ' % maximum_normalized_coordinate, box_maximum]))
 
     return scale(boxlist, height, width)
 
