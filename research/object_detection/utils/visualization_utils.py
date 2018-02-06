@@ -97,7 +97,8 @@ def draw_bounding_box_on_image_array(image,
                                      color='red',
                                      thickness=4,
                                      display_str_list=(),
-                                     use_normalized_coordinates=True):
+                                     use_normalized_coordinates=True,
+                                     font_size=24):
   """Adds a bounding box to an image (numpy array).
 
   Args:
@@ -113,11 +114,12 @@ def draw_bounding_box_on_image_array(image,
     use_normalized_coordinates: If True (default), treat coordinates
       ymin, xmin, ymax, xmax as relative to the image.  Otherwise treat
       coordinates as absolute.
+    font_size: Default value is 24.
   """
   image_pil = Image.fromarray(np.uint8(image)).convert('RGB')
   draw_bounding_box_on_image(image_pil, ymin, xmin, ymax, xmax, color,
                              thickness, display_str_list,
-                             use_normalized_coordinates)
+                             use_normalized_coordinates, font_size)
   np.copyto(image, np.array(image_pil))
 
 
@@ -129,7 +131,8 @@ def draw_bounding_box_on_image(image,
                                color='red',
                                thickness=4,
                                display_str_list=(),
-                               use_normalized_coordinates=True):
+                               use_normalized_coordinates=True,
+                               font_size=24):
   """Adds a bounding box to an image.
 
   Each string in display_str_list is displayed on a separate line above the
@@ -150,6 +153,7 @@ def draw_bounding_box_on_image(image,
     use_normalized_coordinates: If True (default), treat coordinates
       ymin, xmin, ymax, xmax as relative to the image.  Otherwise treat
       coordinates as absolute.
+    font_size: Default value is 24.
   """
   draw = ImageDraw.Draw(image)
   im_width, im_height = image.size
@@ -161,7 +165,7 @@ def draw_bounding_box_on_image(image,
   draw.line([(left, top), (left, bottom), (right, bottom),
              (right, top), (left, top)], width=thickness, fill=color)
   try:
-    font = ImageFont.truetype('arial.ttf', 24)
+    font = ImageFont.truetype('arial.ttf', font_size)
   except IOError:
     font = ImageFont.load_default()
 
@@ -393,7 +397,8 @@ def visualize_boxes_and_labels_on_image_array(image,
                                               max_boxes_to_draw=20,
                                               min_score_thresh=.5,
                                               agnostic_mode=False,
-                                              line_thickness=4):
+                                              line_thickness=4,
+                                              font_size=24):
   """Overlay labeled boxes on an image with formatted scores and label names.
 
   This function groups boxes that correspond to the same location
@@ -424,6 +429,7 @@ def visualize_boxes_and_labels_on_image_array(image,
       class-agnostic mode or not.  This mode will display scores but ignore
       classes.
     line_thickness: integer (default: 4) controlling line width of the boxes.
+    font_size: Default value is 24.
 
   Returns:
     uint8 numpy array with shape (img_height, img_width, 3) with overlaid boxes.
@@ -481,7 +487,8 @@ def visualize_boxes_and_labels_on_image_array(image,
         color=color,
         thickness=line_thickness,
         display_str_list=box_to_display_str_map[box],
-        use_normalized_coordinates=use_normalized_coordinates)
+        use_normalized_coordinates=use_normalized_coordinates,
+        font_size=font_size)
     if keypoints is not None:
       draw_keypoints_on_image_array(
           image,
