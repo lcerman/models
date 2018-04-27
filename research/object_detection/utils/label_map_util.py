@@ -159,6 +159,23 @@ def get_label_map_dict(label_map_path, use_display_name=False):
   return label_map_dict
 
 
+def create_categories_from_labelmap(label_map_path):
+  """Reads a label map and returns categories list compatible with eval.
+
+  Args:
+    label_map_path: Path to `StringIntLabelMap` proto text file.
+
+  Returns:
+    categories: a list of dictionaries representing all possible categories.
+
+  See:
+    convert_label_map_to_categories
+  """
+  label_map = load_labelmap(label_map_path)
+  max_num_classes = max(item.id for item in label_map.item)
+  return convert_label_map_to_categories(label_map, max_num_classes)
+
+
 def create_category_index_from_labelmap(label_map_path):
   """Reads a label map and returns a category index.
 
@@ -170,9 +187,7 @@ def create_category_index_from_labelmap(label_map_path):
     containing categories, e.g.
     {1: {'id': 1, 'name': 'dog'}, 2: {'id': 2, 'name': 'cat'}, ...}
   """
-  label_map = load_labelmap(label_map_path)
-  max_num_classes = max(item.id for item in label_map.item)
-  categories = convert_label_map_to_categories(label_map, max_num_classes)
+  categories = create_categories_from_labelmap(label_map)
   return create_category_index(categories)
 
 
