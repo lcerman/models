@@ -108,7 +108,7 @@ def compute_average_precision(precision, recall):
   recall = np.concatenate([[0], recall, [1]])
   precision = np.concatenate([[0], precision, [0]])
 
-  # Preprocess precision to be a non-decreasing array
+  # Preprocess precision to be a non-increasing array
   for i in range(len(precision) - 2, -1, -1):
     precision[i] = np.maximum(precision[i], precision[i + 1])
 
