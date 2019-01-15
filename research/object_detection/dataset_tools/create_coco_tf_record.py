@@ -47,6 +47,12 @@ flags = tf.app.flags
 tf.flags.DEFINE_boolean('include_masks', False,
                         'Whether to include instance segmentations masks '
                         '(PNG encoded) in the result. default: False.')
+tf.flags.DEFINE_boolean('skip_not_fitting_boxes', False,
+                        "Whether to skip boxes that don't fit entirely in "
+                        "the image.")
+tf.flags.DEFINE_boolean('skip_boxes_outside_image', True,
+                        'Whether to skip boxes that are entirely outside '
+                        'the image.')
 tf.flags.DEFINE_string('train_image_dir', '',
                        'Training image directory.')
 tf.flags.DEFINE_string('val_image_dir', '',
@@ -60,6 +66,11 @@ tf.flags.DEFINE_string('val_annotations_file', '',
 tf.flags.DEFINE_string('testdev_annotations_file', '',
                        'Test-dev annotations JSON file.')
 tf.flags.DEFINE_string('output_dir', '/tmp/', 'Output data directory.')
+tf.flags.DEFINE_integer('train_num_shards', 1,
+                       'If greater than 1 train tf_records will be sharded '
+                       'over multiple files.')
+tf.flags.DEFINE_boolean('contiguous_ids', False, 'Whether to convert category '
+                        'ids into ids from a contiguous range.')
 
 FLAGS = flags.FLAGS
 
@@ -70,7 +81,10 @@ def create_tf_example(image,
                       annotations_list,
                       image_dir,
                       category_index,
-                      include_masks=False):
+                      include_masks=False,
+                      skip_not_fitting_boxes=False,
+                      skip_boxes_outside_image=True,
+                      category_id_mapping=None):
   """Converts image and annotations to a tf.Example proto.
 
   Args:
@@ -93,6 +107,7 @@ def create_tf_example(image,
       label_map_util.create_category_index function.
     include_masks: Whether to include instance segmentations masks
       (PNG encoded) in the result. default: False.
+    category_id_mapping: None or dict mapping category_id to arbitrary integer.
   Returns:
     example: The converted tf.Example
     num_annotations_skipped: Number of (invalid) annotations that were ignored.
@@ -124,10 +139,25 @@ def create_tf_example(image,
   num_annotations_skipped = 0
   for object_annotations in annotations_list:
     (x, y, width, height) = tuple(object_annotations['bbox'])
-    if width <= 0 or height <= 0:
+    if width <= 1.2 or height <= 1.2:
+      tf.logging.warning(
+          'Skipping too small box from image %s (%s). Box width: %s Box height: %s',
+          image_id, filename, width, height
+      )
       num_annotations_skipped += 1
       continue
-    if x + width > image_width or y + height > image_height:
+    if skip_not_fitting_boxes and (
+            x < 0 or x + width > image_width or y < 0 or y + height > image_height):
+      tf.logging.warning(
+          'Skipping box not fitting in the image %s (%s).', image_id, filename
+      )
+      num_annotations_skipped += 1
+      continue
+    if skip_boxes_outside_image and (
+            x + width <= 0 or x >= image_width or y + height <= 0 or y > image_height):
+      tf.logging.warning(
+          'Skipping box outside the image %s (%s).', image_id, filename
+      )
       num_annotations_skipped += 1
       continue
     xmin.append(float(x) / image_width)
@@ -136,7 +166,8 @@ def create_tf_example(image,
     ymax.append(float(y + height) / image_height)
     is_crowd.append(object_annotations['iscrowd'])
     category_id = int(object_annotations['category_id'])
-    category_ids.append(category_id)
+    category_ids.append(
+        category_id_mapping[category_id] if category_id_mapping else category_id)
     category_names.append(category_index[category_id]['name'].encode('utf8'))
     area.append(object_annotations['area'])
 
@@ -188,7 +219,8 @@ def create_tf_example(image,
 
 
 def _create_tf_record_from_coco_annotations(
-    annotations_file, image_dir, output_path, include_masks):
+    annotations_file, image_dir, output_path, include_masks,
+    skip_not_fitting_boxes, skip_boxes_outside_image, num_shards=1):
   """Loads COCO annotation json files and converts to tf.Record format.
 
   Args:
@@ -203,6 +235,11 @@ def _create_tf_record_from_coco_annotations(
     images = groundtruth_data['images']
     category_index = label_map_util.create_category_index(
         groundtruth_data['categories'])
+
+    category_id_mapping = None
+    if FLAGS.contiguous_ids:
+      category_id_mapping = label_map_util.ids_to_contiguous_ids(
+          category_index.keys())
 
     annotations_index = {}
     if 'annotations' in groundtruth_data:
@@ -222,18 +259,23 @@ def _create_tf_record_from_coco_annotations(
     tf.logging.info('%d images are missing annotations.',
                     missing_annotation_count)
 
-    tf.logging.info('writing to output path: %s', output_path)
-    writer = tf.python_io.TFRecordWriter(output_path)
     total_num_annotations_skipped = 0
-    for idx, image in enumerate(images):
-      if idx % 100 == 0:
-        tf.logging.info('On image %d of %d', idx, len(images))
-      annotations_list = annotations_index[image['id']]
-      _, tf_example, num_annotations_skipped = create_tf_example(
-          image, annotations_list, image_dir, category_index, include_masks)
-      total_num_annotations_skipped += num_annotations_skipped
-      writer.write(tf_example.SerializeToString())
-    writer.close()
+    for shard_idx in range(num_shards):
+      output_path_formated = output_path.format(shard_idx)
+      tf.logging.info('writing to output path: %s', output_path_formated)
+      writer = tf.python_io.TFRecordWriter(output_path_formated)
+      images_shard = images[shard_idx::num_shards]
+      for idx, image in enumerate(images_shard):
+        if idx % 1000 == 0:
+          tf.logging.info('On image %d of %d in shard %d of %d',
+                          idx, len(images_shard), shard_idx, num_shards)
+        annotations_list = annotations_index[image['id']]
+        _, tf_example, num_annotations_skipped = create_tf_example(
+            image, annotations_list, image_dir, category_index, include_masks,
+            skip_not_fitting_boxes, skip_boxes_outside_image, category_id_mapping)
+        total_num_annotations_skipped += num_annotations_skipped
+        writer.write(tf_example.SerializeToString())
+      writer.close()
     tf.logging.info('Finished writing, skipped %d annotations.',
                     total_num_annotations_skipped)
 
@@ -245,10 +287,12 @@ def main(_):
   assert FLAGS.train_annotations_file, '`train_annotations_file` missing.'
   assert FLAGS.val_annotations_file, '`val_annotations_file` missing.'
   assert FLAGS.testdev_annotations_file, '`testdev_annotations_file` missing.'
+  assert FLAGS.train_num_shards >= 1
 
   if not tf.gfile.IsDirectory(FLAGS.output_dir):
     tf.gfile.MakeDirs(FLAGS.output_dir)
-  train_output_path = os.path.join(FLAGS.output_dir, 'coco_train.record')
+  train_output_path = os.path.join(FLAGS.output_dir,
+    'coco_train_{}.record' if FLAGS.train_num_shards > 1 else 'coco_train.record')
   val_output_path = os.path.join(FLAGS.output_dir, 'coco_val.record')
   testdev_output_path = os.path.join(FLAGS.output_dir, 'coco_testdev.record')
 
@@ -256,17 +300,24 @@ def main(_):
       FLAGS.train_annotations_file,
       FLAGS.train_image_dir,
       train_output_path,
-      FLAGS.include_masks)
+      FLAGS.include_masks,
+      FLAGS.skip_not_fitting_boxes,
+      FLAGS.skip_boxes_outside_image,
+      FLAGS.train_num_shards)
   _create_tf_record_from_coco_annotations(
       FLAGS.val_annotations_file,
       FLAGS.val_image_dir,
       val_output_path,
-      FLAGS.include_masks)
+      FLAGS.include_masks,
+      FLAGS.skip_not_fitting_boxes,
+      FLAGS.skip_boxes_outside_image)
   _create_tf_record_from_coco_annotations(
       FLAGS.testdev_annotations_file,
       FLAGS.test_image_dir,
       testdev_output_path,
-      FLAGS.include_masks)
+      FLAGS.include_masks,
+      FLAGS.skip_not_fitting_boxes,
+      FLAGS.skip_boxes_outside_image)
 
 
 if __name__ == '__main__':

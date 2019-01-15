@@ -27,7 +27,7 @@
 set -e
 
 if [ -z "$1" ]; then
-  echo "usage download_and_preprocess_mscoco.sh [data dir]"
+  echo "usage download_and_preprocess_mscoco.sh data_dir"
   exit
 fi
 
@@ -39,6 +39,7 @@ fi
 
 # Create the output directories.
 OUTPUT_DIR="${1%/}"
+shift
 SCRATCH_DIR="${OUTPUT_DIR}/raw-data"
 mkdir -p "${OUTPUT_DIR}"
 mkdir -p "${SCRATCH_DIR}"
@@ -93,14 +94,14 @@ TESTDEV_ANNOTATIONS_FILE="${SCRATCH_DIR}/annotations/image_info_test-dev2017.jso
 
 # Build TFRecords of the image data.
 cd "${CURRENT_DIR}"
-python object_detection/dataset_tools/create_coco_tf_record.py \
+DATASET_TOOLS_DIR=$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")
+python "$DATASET_TOOLS_DIR/create_coco_tf_record.py" \
   --logtostderr \
-  --include_masks \
   --train_image_dir="${TRAIN_IMAGE_DIR}" \
   --val_image_dir="${VAL_IMAGE_DIR}" \
   --test_image_dir="${TEST_IMAGE_DIR}" \
   --train_annotations_file="${TRAIN_ANNOTATIONS_FILE}" \
   --val_annotations_file="${VAL_ANNOTATIONS_FILE}" \
   --testdev_annotations_file="${TESTDEV_ANNOTATIONS_FILE}" \
-  --output_dir="${OUTPUT_DIR}"
-
+  --output_dir="${OUTPUT_DIR}" \
+  "$@"

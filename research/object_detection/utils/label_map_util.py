@@ -194,3 +194,46 @@ def create_category_index_from_labelmap(label_map_path):
 def create_class_agnostic_category_index():
   """Creates a category index with a single `object` class."""
   return {1: {'id': 1, 'name': 'object'}}
+
+
+def ids_to_contiguous_ids(ids):
+    """Creates dict mapping original id to id from contiguous integer range.
+
+    The mapping preserves ids ordering and starts with 0 if the original ids
+    contained value 0, which is reserved for background. It starts with 1 if
+    the background id was not present within the original ids.
+
+    Args:
+      ids:      Iterable representing the original ids.
+
+    Returns:
+      Dict mapping original id to id from contiguous integer range.
+    """
+    sorted_ids = sorted(ids)
+    # 0 is reserved for background ID, use it only when present in the original
+    # IDs collection
+    first_id = 0 if sorted_ids[0] == 0 else 1
+    return {
+        id : contiguous_id
+        for (contiguous_id, id) in enumerate(sorted_ids, first_id)
+    }
+
+
+def labelmap_to_contiguous_labelmap(labelmap_path, contiguous_labelmap_path):
+  """Converts label map proto into label map proto with ids from a contiguous
+  range.
+
+  Args:
+    labelmap_path: path to source StringIntLabelMap proto text file.
+    contiguous_labelmap_path: path to destination StringIntLabelMap proto text
+      file.
+
+  See:
+    ids_to_contiguous_ids
+  """
+  label_map = load_labelmap(labelmap_path)
+  contiguous_ids = ids_to_contiguous_ids(item.id for item in label_map.item)
+  for item in label_map.item:
+    item.id = contiguous_ids[item.id]
+  with tf.gfile.GFile(contiguous_labelmap_path, 'w') as fid:
+    fid.write(text_format.MessageToString(label_map))
