@@ -187,7 +187,7 @@ def create_category_index_from_labelmap(label_map_path):
     containing categories, e.g.
     {1: {'id': 1, 'name': 'dog'}, 2: {'id': 2, 'name': 'cat'}, ...}
   """
-  categories = create_categories_from_labelmap(label_map)
+  categories = create_categories_from_labelmap(label_map_path)
   return create_category_index(categories)
 
 
